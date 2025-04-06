@@ -1,0 +1,33 @@
+module add2b(
+input [1:0] x, y,
+input ci,
+output [1:0] o,
+output co);
+
+wire c1;
+
+fac f1(.x(x[0]), .y(y[0]), .o(o[0]), .ci(ci), .co(c1));
+fac f2(.x(x[1]), .y(y[1]), .o(o[1]), .ci(c1), .co(co));
+
+endmodule
+
+module add2b_tb;
+reg [1:0] x,y;
+reg ci;
+wire [1:0] o;
+wire co;
+
+add2b add(.x(x), .y(y), .o(o), .ci(ci), .co(co));
+integer k;
+initial begin
+
+$display("Time\tx\ty\t\to\tci\tco");
+$monitor("%0t\t%b(%0d)\t%b(%0d)\t%b(%0d)\t\t%b\t%b");
+
+for (k = 0; k < 32; k = k + 1)
+   {x, y, ci} = k;
+  #10
+end
+
+end
+endmodule

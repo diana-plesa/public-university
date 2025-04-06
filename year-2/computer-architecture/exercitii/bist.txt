@@ -1,0 +1,15 @@
+module mux_2s #(parameter w = 4)
+(input [w-1:0] d0, d1, d2, d3,
+input [1:0] s,
+output [w-1:0] o);
+
+wire [3:0] dout;
+dec_2s inst0(.s(s), .e(1'd1), .o(dout));
+
+always @ (*) 
+ if (dout[0]) o = d1;
+ else if (dout[1]) o = d1;
+ else if (dout[2]) o = d2;
+ else if (dout[3]) o = d3;
+ else o = {w{1'bz}};
+endmodule

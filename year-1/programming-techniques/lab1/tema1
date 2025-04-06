@@ -1,0 +1,48 @@
+//Se citește de la tastatură o matrice cu n<=20 linii și coloane. Să se memoreze într-un vector suma tuturor elementelor de 
+//pe fiecare linie și într-un alt vector, suma tuturor elementelor de pe fiecare coloană. Să se afișeze cei doi vectori. Se vor utiliza pointeri 
+//atât pentru vectori cât și pentru matrici.
+
+#include <stdio.h>
+#include <stdlib.h>
+
+int main()
+{
+    int n, **m, i, j, sum_lin = 0, sum_col = 0;
+    
+
+    scanf("%d", &n);
+
+    if ((m = malloc(n * sizeof(int*))) == NULL)
+    {
+        perror("error memory malloc for lines");
+        exit(-1);
+    }
+
+    for (i = 0; i < n; i++)
+    {
+        if ((m[i] = malloc(n * sizeof(int))) == NULL)
+        {
+            for (j = 0; j < i; j++)
+            {
+                free(m[j]);
+            }
+            free(m);
+            perror("error memory malloc for cols");
+            exit(-1);
+        }
+    }
+
+    int k, l = 0;
+
+    for (i = 0 ;i < n; i++)
+    {
+        sum_lin = sum_lin + m[i];
+
+        for (j = 0; j < n; j++)
+        {
+            sum_col = sum_col + m[i][j];
+        }
+    }
+
+    return 0;
+}
