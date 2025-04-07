@@ -151,11 +151,9 @@ void add_hunt(char hunt_id[], char pathname[])
 
 	TREASURE tr;
 	tr = read_treasure();
-	char action[10];
-	strcpy(action, "add");
 
 	write_treasure(f_out, tr);
-	write_log(f_log, tr, action);
+	write_log(f_log, tr, "add");
 
 	create_symlink(logpath, hunt_id);
 	close_file(f_out);
@@ -177,17 +175,14 @@ void read_treasure_ids(int file_out)
 void list_hunt(char hunt_id[], char pathname[])
 {
 	printf("Hunt name: %s\n", hunt_id);
-	char filepath[100], logpath[100];
+	char filepath[100];
 	strcpy(filepath, pathname);
 	strcat(filepath, "/treasures.bin");
-
-	strcpy(logpath, pathname);
-	strcat(logpath, "/logged_hunt.txt");
 
 	int f_out = open_file_read(filepath);
 
 	struct stat statbuf;
-	int status = stat(logpath, &statbuf);
+	int status = stat(filepath, &statbuf);
 
 	if (status != 0)
 	{
