@@ -35,10 +35,22 @@ void create_directory(char pathname[])
 	}
 }
 
-int open_file(char filename[])
+int open_file_write(char filename[])
 {
 	int f_out = 0;
 	if ((f_out = open(filename, O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+	{
+		printf("Error opening file\n");
+		exit(-1);
+	}
+
+	return f_out;
+}
+
+int open_file_read(char filename[])
+{
+	int f_out = 0;
+	if ((f_out = open(filename, O_RDONLY)) == -1)
 	{
 		printf("Error opening file\n");
 		exit(-1);
@@ -60,7 +72,7 @@ TREASURE read_treasure()
 	printf("Y: ");
 	scanf("%f", &tr.coord.y);
 	printf("Clue: ");
-	scanf("%s", tr.clue);
+	scanf("%s", tr.clue); //to be modified here 
 	//getchar();
 	printf("Value: ");
 	scanf("%d", &tr.value);
@@ -78,7 +90,7 @@ void write_treasure(int f_out, TREASURE tr)
 	}
 }
 
-void write_log(int f_out, TREASURE tr)
+void write_log(int f_out, TREASURE tr, char action[])
 {
 	time_t now = time(NULL);
 	struct tm *local_time = localtime(&now);
@@ -86,9 +98,10 @@ void write_log(int f_out, TREASURE tr)
 	strcpy(final_time, asctime(local_time));
 	final_time[strcspn(final_time, "\n")] = '\0';
 
+
 	char log_entry[200];
 
-	snprintf(log_entry, sizeof(log_entry), "User: %s - Date: %s - Treasure ID: %s\n", tr.username, final_time, tr.treasure_id);
+	snprintf(log_entry, sizeof(log_entry), "User: %s - Action: %s - Date: %s - Treasure ID: %s\n", tr.username, action, final_time, tr.treasure_id);
 
 	if (write(f_out, log_entry, strlen(log_entry)) == -1)
 	{
@@ -97,9 +110,17 @@ void write_log(int f_out, TREASURE tr)
 	}
 }
 
-void create_symlink(char logpath[], char pathname[])
+void create_symlink(char logpath[], char hunt_id[])
 {
-	
+	char sym_path[100];
+	strcpy(sym_path, "logged_hunt-");
+	strcat(sym_path, hunt_id);
+
+	if (symlink(logpath, sym_path) != 0 && errno != EEXIST)
+	{
+		printf("Error creating symlink");
+		exit(-1);
+	}
 }
 
 void close_file(int f_out)
@@ -111,12 +132,8 @@ void close_file(int f_out)
 	}
 }
 
-void add_hunt(char hunt_id[])
+void add_hunt(char hunt_id[], char pathname[])
 {
-	char pathname[100];
-	strcpy(pathname, "/home/vboxuser/FACULTATE/An2/TreasureManager/");
-	strcat(pathname, hunt_id);
-	
 	create_directory(pathname);
 
 	char filepath[100];
@@ -129,22 +146,74 @@ void add_hunt(char hunt_id[])
 
 	int f_out = 0, f_log = 0;
 
-	f_out = open_file(filepath);
-	f_log = open_file(logpath);
+	f_out = open_file_write(filepath);
+	f_log = open_file_write(logpath);
 
 	TREASURE tr;
 	tr = read_treasure();
+	char action[10];
+	strcpy(action, "add");
 
 	write_treasure(f_out, tr);
-	write_log(f_log, tr);
+	write_log(f_log, tr, action);
 
+	create_symlink(logpath, hunt_id);
 	close_file(f_out);
 	close_file(f_log);
 
 }
 
+void read_treasure_ids(int file_out)
+{
+	printf("Treasures in hunt: ");
+	TREASURE tr;
+	while (read(file_out, &tr, sizeof(TREASURE)) == sizeof(TREASURE))
+	{
+		printf("%s ", tr.treasure_id);
+	}
+	printf("\n");
+}
+
+void list_hunt(char hunt_id[], char pathname[])
+{
+	printf("Hunt name: %s\n", hunt_id);
+	char filepath[100], logpath[100];
+	strcpy(filepath, pathname);
+	strcat(filepath, "/treasures.bin");
+
+	strcpy(logpath, pathname);
+	strcat(logpath, "/logged_hunt.txt");
+
+	int f_out = open_file_read(filepath);
+
+	struct stat statbuf;
+	int status = stat(logpath, &statbuf);
+
+	if (status != 0)
+	{
+		printf("Error stat\n");
+		exit(-1);
+	}
+
+	printf("File size: %ld\n", statbuf.st_size);
+	
+	struct tm *local_time = localtime(&statbuf.st_mtime);
+	char final_time[50];
+	strcpy(final_time, asctime(local_time));
+	final_time[strcspn(final_time, "\n")] = '\0';
+
+	printf("File last modification: %s\n", final_time);
+	read_treasure_ids(f_out);
+
+
+	close_file(f_out);
+}
+
 int main(int argc, char** argv)
 {
+	char pathname[100];
+	strcpy(pathname, "/home/vboxuser/FACULTATE/An2/TreasureManager/");
+	
 	if (argc == 1)
 	{
 		printf("Invalid count of arguments - format should be:\n");
@@ -164,11 +233,24 @@ int main(int argc, char** argv)
 			printf("Format should be ./exec --add <hunt_id>\n");
 			return 0;
 		}
+		
+		char hunt_id[35];
+		strcpy(hunt_id, argv[2]);
+		strcat(pathname, hunt_id);
+		add_hunt(hunt_id, pathname);
+	}
+	else if (strcmp(argv[1], "--list") == 0)
+	{
+		if (argc == 2)
+		{
+			printf("Format should be ./exec --list <hunt_id>\n");
+			return 0;
+		}
 
 		char hunt_id[35];
 		strcpy(hunt_id, argv[2]);
-		add_hunt(hunt_id);
-
+		strcat(pathname, hunt_id);
+		list_hunt(hunt_id, pathname);
 	}
 
 
