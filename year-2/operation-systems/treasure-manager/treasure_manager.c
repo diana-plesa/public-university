@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <time.h>
+//#include <conio.h>
 
 typedef struct
 {
@@ -78,59 +79,109 @@ void file_exists(char* filepath)
 	}
 }
 
+void read_str(char* str, size_t size)
+{
+	fgets(str, size, stdin);
+	str[strcspn(str, "\n")] = '\0';
+}
+
+int check_format(char* critical_chars, char* str, int ok_variables)
+{
+	int format = 0;
+	for (int i = 0; i < strlen(str); i++)
+	{
+		if (strchr(critical_chars, str[i]))
+			format = 1;
+	}
+
+	if (ok_variables == 1) //critical_chars are not allowed to be in the string
+		if (format)
+		{
+			printf("Invalid format - try again\n");	
+			return 1;
+		}
+		else return 0;
+	else  
+		if (format == 0)
+		{
+			printf("Invalid format - try again\n");	
+			return 1;
+		}
+		else return 0;
+}
+
+
 TREASURE read_treasure()
 {
 	TREASURE tr;
+	int format = 1;
 
-	printf("Username (cannot contain whitespaces) (34 characters max): ");
-	scanf("%34s", tr.username);
-	printf("Treasure id (must contain at least one number) (10 characters max): ");
-	scanf("%10s", tr.treasure_id);
-	int id_format = 1;
-	for (int i = 0; i < strlen(tr.treasure_id); i++)
+	while (format)
 	{
-		if (strchr("0123456789", tr.treasure_id[i]))
-			id_format = 0;
+		printf("Username (cannot contain whitespaces): ");
+		//getchar();
+		read_str(tr.username, sizeof(tr.username));
+		format = check_format("	 ", tr.username, 1);	
 	}
-	if (id_format)
+
+	format = 1;
+
+	while (format)
 	{
-		printf("Invalid treasure_id format\n");
-		exit(-1);
+		printf("Treasure id (must contain at least one number): ");
+		//getchar();
+		read_str(tr.treasure_id, sizeof(tr.treasure_id));
+		format = check_format("0123456789", tr.treasure_id, 0);	
 	}
-	printf("X (must be between -500 and 500): ");
-	getchar();
-	scanf("%f", &tr.coord.x);
-	if (tr.coord.x < -500 || tr.coord.x > 500)
+
+	format = 1;
+	while (format)
 	{
-		printf("Invalid X coordinate\n");
-		exit(-1);
+		printf("X (must be between -500 and 500): ");
+		scanf("%f", &tr.coord.x);
+		if (tr.coord.x < -500 || tr.coord.x > 500)
+		{
+			printf("Invalid X coordinate - try again\n");
+		}
+		else format = 0;
 	}
-	printf("Y (must be between -500 and 500): ");
-	getchar();
-	scanf("%f", &tr.coord.y);
-	if (tr.coord.y < -500 || tr.coord.y > 500)
+
+	format = 1;
+	while (format)
 	{
-		printf("Invalid Y coordinate\n");
-		exit(-1);
+		printf("Y (must be between -500 and 500): ");
+		scanf("%f", &tr.coord.y);
+		if (tr.coord.y < -500 || tr.coord.y > 500)
+		{
+			printf("Invalid Y coordinate - try again\n");
+		}
+		else format = 0;
 	}
+
 	printf("Clue (50 characters max): ");
 	getchar();
 	fgets(tr.clue, sizeof(tr.clue), stdin);
 	tr.clue[strcspn(tr.clue, "\n")] = '\0';
-	printf("Value (must be between 5 and 12000): ");
-	scanf("%d", &tr.value);
-	if (tr.value < 5 || tr.value > 12000)
+
+	format = 1;
+	while (format)
 	{
-		printf("Invalid treasure value\n");
-		exit(-1);
+		printf("Value (must be between 5 and 12000): ");
+		scanf("%d", &tr.value);
+		if (tr.value < 5 || tr.value > 12000)
+		{
+			printf("Invalid treasure value - try again\n");
+		}
+		else format = 0;
 	}
+
 
 	return tr;
 }
 
 void write_treasure(int f_out, TREASURE tr)
 {
-
+	//write treasure to a file
 	if (write(f_out, &tr, sizeof(tr)) == -1)
 	{
 		perror("Error writing in file\n");
@@ -140,6 +191,7 @@ void write_treasure(int f_out, TREASURE tr)
 
 void get_time(struct tm *local_time, char* final_time)
 {
+	//get time format
 	strftime(final_time, 26, "%Y-%m-%d %H:%M:%S", local_time);
 }
 
@@ -215,6 +267,7 @@ void add_hunt(char hunt_id[], char pathname[])
 
 	create_symlink(logpath, hunt_id);
 	close_file(f_out);
+	printf("Successfully added treasure in hunt\n");
 }
 
 void print_treasure(TREASURE tr)
@@ -233,7 +286,6 @@ void print_treasures(int file_out)
 	TREASURE tr;
 	while (read(file_out, &tr, sizeof(TREASURE)) == sizeof(TREASURE))
 	{
-		//printf("%s ", tr.treasure_id);
 		print_treasure(tr);
 		printf("\n");
 	}
@@ -242,9 +294,7 @@ void print_treasures(int file_out)
 
 void list_hunt(char hunt_id[], char pathname[])
 {
-	//strcat(pathname, hunt_id);
 	concat_path(pathname, hunt_id);
-	//dir_exists(pathname);
 	char filepath[100];
 	strcpy(filepath, pathname);
 	strcat(filepath, "/treasures.bin");
@@ -265,20 +315,18 @@ void list_hunt(char hunt_id[], char pathname[])
 	
 	struct tm *local_time = localtime(&statbuf.st_mtime);
 	char final_time[50];
-	get_time(local_time, final_time);
+	get_time(local_time, final_time); //get time of last edit
 
 	printf("File last modification: %s\n", final_time);
 	print_treasures(f_out);
-
-
 	close_file(f_out);
+	printf("Succesfully listed hunt\n");
 }
 
 void view_tr(char* hunt_id, char* tr_id, char* pathname)
 {
 	int f_out = 0;
 	concat_path(pathname, hunt_id);
-	//dir_exists(pathname);
 	char filepath[100];
 	strcpy(filepath, pathname);
 	strcat(filepath, "/treasures.bin");
@@ -290,7 +338,7 @@ void view_tr(char* hunt_id, char* tr_id, char* pathname)
 	{
 		read_out = read(f_out, &tr, sizeof(TREASURE));
 
-	}while ((strcmp(tr.treasure_id, tr_id) != 0) && read_out == sizeof(TREASURE));
+	}while ((strcmp(tr.treasure_id, tr_id) != 0) && read_out == sizeof(TREASURE)); //read treasures until found or end of file
 
 	if (strcmp(tr.treasure_id, tr_id) != 0)
 	{
@@ -300,6 +348,7 @@ void view_tr(char* hunt_id, char* tr_id, char* pathname)
 	}
 	print_treasure(tr);
 	close_file(f_out);
+	printf("Successfully viewed treasure\n");
 
 }
 
@@ -314,7 +363,7 @@ void remove_tr(char* hunt_id, char* tr_id, char* pathname)
 	strcpy(filepath, pathname);
 	strcat(filepath, "/treasures.bin");
 	strcpy(temppath, filepath);
-	strcat(temppath, ".bak");
+	strcat(temppath, ".bak"); //create temporary file treasures.bin.bak
 	f_out = open_file_read(filepath);
 	f_temp = open_file_write(temppath);
 	TREASURE tr;
@@ -324,9 +373,9 @@ void remove_tr(char* hunt_id, char* tr_id, char* pathname)
 	{
 		if (strcmp(tr_id, tr.treasure_id) != 0)
 		{
-			write_treasure(f_temp, tr);
+			write_treasure(f_temp, tr); //write treasures in temporary file as long as they're not the treasure to be removed
 		}
-		else found = 1;
+		else found = 1; //wanted treasure is found
 	}
 
 	close_file(f_temp);
@@ -346,7 +395,7 @@ void remove_tr(char* hunt_id, char* tr_id, char* pathname)
 	}
 	f_temp = open_file_read(temppath);
 
-	if ((f_out = open(filepath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+	if ((f_out = open(filepath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1) //truncated the original file
 	{
 		perror("Error opening file");
 		exit(-1);
@@ -354,12 +403,12 @@ void remove_tr(char* hunt_id, char* tr_id, char* pathname)
 
 	while (read(f_temp, &tr, sizeof(TREASURE)) == sizeof(TREASURE))
 	{
-		write_treasure(f_out, tr);
+		write_treasure(f_out, tr); //copy contents from temporary file in original fine
 	}
 	close_file(f_out);
 	close_file(f_temp);
 
-	if (remove(temppath) != 0)
+	if (remove(temppath) != 0) //delete temporary file
 	{
 		perror("Could not remove file\n");
 		exit(-1);
@@ -368,10 +417,11 @@ void remove_tr(char* hunt_id, char* tr_id, char* pathname)
 	strcpy(action, "remove from ");
 	strcat(action, hunt_id);
 
-	write_log(pathname, username, tr_id, action);
+	write_log(pathname, username, tr_id, action); //add to log
+	printf("Successfully removed treasure\n");
 }
 
-void remove_in_dir(char* dirpath, char* pathname)
+void remove_in_dir(char* dirpath)
 {
 	DIR *dir = opendir(dirpath);
 	if (dir == NULL)
@@ -383,17 +433,15 @@ void remove_in_dir(char* dirpath, char* pathname)
 	char filepath[100];
 	
 	struct dirent* entry;
-	errno = 0;
+	errno = 0; //set to 0 to distinguish end of stream from an error
 
 	while ((entry = readdir(dir)) != NULL)
 	{
-		//printf("%s\n", entry->d_name);
 		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
 		continue;
 		
 		strcpy(filepath, dirpath);
 		concat_path(filepath, entry->d_name);
-		//printf("%s\n", filepath);
 		if (remove(filepath) != 0)
 		{
 			perror("Could not remove file inside hunt directory");
@@ -404,6 +452,12 @@ void remove_in_dir(char* dirpath, char* pathname)
 			}
 			exit(-1);
 		}
+	}
+
+	if (errno != 0)
+	{
+		perror("Error reading directory\n");
+		exit(-1);
 	}
 
 		if (closedir(dir) != 0)
@@ -423,7 +477,7 @@ void remove_hunt(char* hunt_id, char* pathname)
 	strcat(symname, hunt_id);
 	concat_path(dirpath, hunt_id);
 
-	remove_in_dir(dirpath, pathname);
+	remove_in_dir(dirpath);
 
 	concat_path(sympath, symname);
 	if (remove(dirpath) != 0)
@@ -432,12 +486,12 @@ void remove_hunt(char* hunt_id, char* pathname)
 		exit(-1);
 	}
 
-	if (unlink(sympath) != 0)
+	if (unlink(sympath) != 0) //remove symlink
 	{
 		perror("Error remove symlink");
 		exit(-1);
 	}
-
+	printf("Successfully removed hunt\n");
 }
 
 
@@ -529,6 +583,5 @@ int main(int argc, char** argv)
 		remove_hunt(hunt_id, pathname);
 	}
 
-	//!!!! basic data validation
 	return 0;
 }
