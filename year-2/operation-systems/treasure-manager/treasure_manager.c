@@ -8,13 +8,12 @@
 #include <errno.h>
 #include <unistd.h>
 #include <time.h>
-//#include <conio.h>
 
 typedef struct
 {
 	float x;
 	float y;
-}GPS;
+} GPS;
 
 typedef struct
 {
@@ -23,11 +22,11 @@ typedef struct
 	GPS coord;
 	char clue[51];
 	int value;
-}TREASURE;
+} TREASURE;
 
 void create_directory(char pathname[])
 {
-	int status = mkdir(pathname, 0755);
+	int status = mkdir(pathname, 0755); //read and execute permissions for everyone, plus write permission to user
 	
 	if (status != 0 && errno != EEXIST)
 	{
@@ -69,24 +68,21 @@ void close_file(int f_out)
 	}
 }
 
-void file_exists(char* filepath)
-{
-	if (access(filepath, F_OK) == 0) return;
-	else 
-	{
-		printf("File does not exist\n");
-		exit(-1);
-	}
-}
-
-void read_str(char* str, size_t size)
+void read_line(char* str, size_t size)
 {
 	fgets(str, size, stdin);
 	str[strcspn(str, "\n")] = '\0';
 }
 
-int check_format(char* critical_chars, char* str, int ok_variables)
+int check_format(char* critical_chars, char* str, int include)
 {
+	//this function checks the format of a given string by checking if
+	//if it contains a character from the critical_chars string. The
+	//validation result of the format depends on the 'include' 
+	//parameter - if it's 0, at least one of the critical_chars must be
+	//included in the original string. Otherwise, it must not contain
+	//any of the characters from critical_chars.
+
 	int format = 0;
 	for (int i = 0; i < strlen(str); i++)
 	{
@@ -94,7 +90,7 @@ int check_format(char* critical_chars, char* str, int ok_variables)
 			format = 1;
 	}
 
-	if (ok_variables == 1) //critical_chars are not allowed to be in the string
+	if (include == 1) //critical_chars are not allowed to be in the string
 		if (format)
 		{
 			printf("Invalid format - try again\n");	
@@ -113,15 +109,15 @@ int check_format(char* critical_chars, char* str, int ok_variables)
 
 TREASURE read_treasure()
 {
+	//reads treasure details from keyboard
 	TREASURE tr;
 	int format = 1;
 
 	while (format)
 	{
-		printf("Username (cannot contain whitespaces): ");
-		//getchar();
-		read_str(tr.username, sizeof(tr.username));
-		format = check_format("	 ", tr.username, 1);	
+		printf("Username (cannot contain whitespaces or any of the following symbols /:*?<>|): ");
+		read_line(tr.username, sizeof(tr.username));
+		format = check_format("	 /:*?<>|", tr.username, 1);	
 	}
 
 	format = 1;
@@ -129,8 +125,7 @@ TREASURE read_treasure()
 	while (format)
 	{
 		printf("Treasure id (must contain at least one number): ");
-		//getchar();
-		read_str(tr.treasure_id, sizeof(tr.treasure_id));
+		read_line(tr.treasure_id, sizeof(tr.treasure_id));
 		format = check_format("0123456789", tr.treasure_id, 0);	
 	}
 
@@ -160,8 +155,7 @@ TREASURE read_treasure()
 
 	printf("Clue (50 characters max): ");
 	getchar();
-	fgets(tr.clue, sizeof(tr.clue), stdin);
-	tr.clue[strcspn(tr.clue, "\n")] = '\0';
+	read_line(tr.clue, sizeof(tr.clue));
 
 	format = 1;
 	while (format)
@@ -175,13 +169,12 @@ TREASURE read_treasure()
 		else format = 0;
 	}
 
-
 	return tr;
 }
 
 void write_treasure(int f_out, TREASURE tr)
 {
-	//write treasure to a file
+	//writes treasure to a file
 	if (write(f_out, &tr, sizeof(tr)) == -1)
 	{
 		perror("Error writing in file\n");
@@ -191,12 +184,13 @@ void write_treasure(int f_out, TREASURE tr)
 
 void get_time(struct tm *local_time, char* final_time)
 {
-	//get time format
+	//gets time format to a string
 	strftime(final_time, 26, "%Y-%m-%d %H:%M:%S", local_time);
 }
 
 void write_log(char* pathname, char* username, char* id, char action[])
 {
+	//writes content to the log file
 	char logpath[100];
 	strcpy(logpath, pathname);
 	strcat(logpath, "/logged_hunt.txt");
@@ -225,6 +219,7 @@ void write_log(char* pathname, char* username, char* id, char action[])
 
 void create_symlink(char logpath[], char hunt_id[])
 {
+	//creates symlink to log file
 	char sym_path[100];
 	strcpy(sym_path, "logged_hunt-");
 	strcat(sym_path, hunt_id);
@@ -250,7 +245,9 @@ void add_hunt(char hunt_id[], char pathname[])
 	char filepath[100];
 	char logpath[100];
 	strcpy(filepath, pathname);
-	strcat(filepath, "/treasures.bin");
+	strcat(filepath, "/treasures.bin"); 
+	//more efficient to concatenate strings directly in one strcat
+	//than use concat_path, which uses two strcat
 
 	strcpy(logpath, pathname);
 	strcat(logpath, "/logged_hunt.txt");
@@ -311,7 +308,7 @@ void list_hunt(char hunt_id[], char pathname[])
 		exit(-1);
 	}
 
-	printf("File size: %ld\n", statbuf.st_size);
+	printf("File size: %ld\n", statbuf.st_size); //get size of file
 	
 	struct tm *local_time = localtime(&statbuf.st_mtime);
 	char final_time[50];
@@ -352,8 +349,17 @@ void view_tr(char* hunt_id, char* tr_id, char* pathname)
 
 }
 
-void remove_tr(char* hunt_id, char* tr_id, char* pathname)
+void remove_treasure(char* hunt_id, char* tr_id, char* pathname)
 {
+	//this function copies the content from the original file
+	//into a temporary .bak file except the treasure to be removed
+	//if it exists. The original file is then truncated and the content from
+	//the temporary file is re-written, and then the temporary file is removed. 
+	//It wasn't necessary to use lseek to implement the intended functionality.
+	//Another way to implement this function is to remove the original file
+	//once the content has been copied, and the temporary file to be renamed
+	//using the 'rename' function. 
+
 	char username[35];
 	printf("Username: ");
 	scanf("%s", username);
@@ -403,7 +409,7 @@ void remove_tr(char* hunt_id, char* tr_id, char* pathname)
 
 	while (read(f_temp, &tr, sizeof(TREASURE)) == sizeof(TREASURE))
 	{
-		write_treasure(f_out, tr); //copy contents from temporary file in original fine
+		write_treasure(f_out, tr); //copy contents from temporary file in original file
 	}
 	close_file(f_out);
 	close_file(f_temp);
@@ -421,7 +427,7 @@ void remove_tr(char* hunt_id, char* tr_id, char* pathname)
 	printf("Successfully removed treasure\n");
 }
 
-void remove_in_dir(char* dirpath)
+void empty_directory(char* dirpath)
 {
 	DIR *dir = opendir(dirpath);
 	if (dir == NULL)
@@ -460,7 +466,7 @@ void remove_in_dir(char* dirpath)
 		exit(-1);
 	}
 
-		if (closedir(dir) != 0)
+	if (closedir(dir) != 0)
 	{
 		perror("Error closing directory\n");
 		exit(-1);
@@ -477,7 +483,7 @@ void remove_hunt(char* hunt_id, char* pathname)
 	strcat(symname, hunt_id);
 	concat_path(dirpath, hunt_id);
 
-	remove_in_dir(dirpath);
+	empty_directory(dirpath); //empty the content of the directory
 
 	concat_path(sympath, symname);
 	if (remove(dirpath) != 0)
@@ -566,10 +572,10 @@ int main(int argc, char** argv)
 		strcpy(hunt_id, argv[2]);
 		strcpy(tr_id, argv[3]);
 
-		remove_tr(hunt_id, tr_id, pathname);
+		remove_treasure(hunt_id, tr_id, pathname);
 	}
 
-		else if (strcmp(argv[1], "--remove_hunt") == 0)
+	else if (strcmp(argv[1], "--remove_hunt") == 0)
 	{
 		if (argc != 3)
 		{
