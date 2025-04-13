@@ -175,6 +175,7 @@ TREASURE read_treasure()
 void write_treasure(int f_out, TREASURE tr)
 {
 	//writes treasure to a file
+
 	if (write(f_out, &tr, sizeof(tr)) == -1)
 	{
 		perror("Error writing in file\n");
@@ -256,8 +257,21 @@ void add_hunt(char hunt_id[], char pathname[])
 
 	f_out = open_file_write(filepath);
 
+	if ((f_out = open(filepath, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+	{
+		perror("Error opening file");
+		exit(-1);
+	}
+
+
 	TREASURE tr;
 	tr = read_treasure();
+
+	if (lseek(f_out, 0, SEEK_END) == -1) //move cursor to end of file; same functionality with O_APPEND
+	{
+		perror("Error lseek\n");
+		exit(-1);
+	}
 
 	write_treasure(f_out, tr);
 	write_log(pathname, tr.username, tr.treasure_id, "add");
@@ -356,8 +370,8 @@ void remove_treasure(char* hunt_id, char* tr_id, char* pathname)
 	//if it exists. The original file is then truncated and the content from
 	//the temporary file is re-written, and then the temporary file is removed. 
 	//It wasn't necessary to use lseek to implement the intended functionality.
-	//Another way to implement this function is to remove the original file
-	//once the content has been copied, and the temporary file to be renamed
+	//Another potential way to implement this function is to remove the original file
+	//once the content has been copied, and the temporary file to be renamed to 'treasures.bin'
 	//using the 'rename' function. 
 
 	char username[35];
