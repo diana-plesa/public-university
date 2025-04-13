@@ -28,7 +28,7 @@ void create_directory(char pathname[])
 {
 	int status = mkdir(pathname, 0755); //read and execute permissions for everyone, plus write permission to user
 	
-	if (status != 0 && errno != EEXIST)
+	if (status != 0 && errno != EEXIST) //ignores error if directory already exists
 	{
 		perror("Error creating directory");
 		exit(-1);
@@ -80,7 +80,7 @@ int check_format(char* critical_chars, char* str, int include)
 	//if it contains a character from the critical_chars string. The
 	//validation result of the format depends on the 'include' 
 	//parameter - if it's 0, at least one of the critical_chars must be
-	//included in the original string. Otherwise, it must not contain
+	//included in the original string. If it's 1, it must not contain
 	//any of the characters from critical_chars.
 
 	int format = 0;
@@ -90,14 +90,14 @@ int check_format(char* critical_chars, char* str, int include)
 			format = 1;
 	}
 
-	if (include == 1) //critical_chars are not allowed to be in the string
+	if (include == 1) //critical_chars characters are not allowed to be in the string
 		if (format)
 		{
 			printf("Invalid format - try again\n");	
 			return 1;
 		}
 		else return 0;
-	else  
+	else   //at least one critical_chars character must be in the string
 		if (format == 0)
 		{
 			printf("Invalid format - try again\n");	
@@ -107,11 +107,11 @@ int check_format(char* critical_chars, char* str, int include)
 }
 
 
-TREASURE read_treasure()
+TREASURE read_treasure(char* filepath)
 {
 	//reads treasure details from keyboard
 	TREASURE tr;
-	int format = 1;
+	int format = 1; //variable to allow user to retry writing data if the given value has wrong format
 
 	while (format)
 	{
@@ -120,13 +120,26 @@ TREASURE read_treasure()
 		format = check_format("	 /:*?<>|", tr.username, 1);	
 	}
 
-	format = 1;
+	format = 1; //reset variable for the next value
 
 	while (format)
 	{
 		printf("Treasure id (must contain at least one number): ");
 		read_line(tr.treasure_id, sizeof(tr.treasure_id));
 		format = check_format("0123456789", tr.treasure_id, 0);	
+
+		int f_out = 0;
+		f_out = open_file_read(filepath);
+		TREASURE existing_treasure; //check for any treasure_id duplicates
+
+		while (read(f_out, &existing_treasure, sizeof(TREASURE)) == sizeof(TREASURE))
+		{
+			if (strcmp(existing_treasure.treasure_id, tr.treasure_id) == 0)
+			{
+				printf("A treasure with this id already exists - try again\n");
+				format = 1;
+			}
+		}
 	}
 
 	format = 1;
@@ -189,7 +202,7 @@ void get_time(struct tm *local_time, char* final_time)
 	strftime(final_time, 26, "%Y-%m-%d %H:%M:%S", local_time);
 }
 
-void write_log(char* pathname, char* username, char* id, char action[])
+void write_log(char* pathname, char* username, char *hunt_id, char* treasure_id, char action[])
 {
 	//writes content to the log file
 	char logpath[100];
@@ -204,10 +217,10 @@ void write_log(char* pathname, char* username, char* id, char action[])
 	struct tm *local_time = localtime(&now);
 	char final_time[50];
 
-	get_time(local_time, final_time);
+	get_time(local_time, final_time); //final_time will now contain wanted format
 	char log_entry[200];
 
-	snprintf(log_entry, sizeof(log_entry), "%s %s: %s %s\n", final_time, username, action, id);
+	snprintf(log_entry, sizeof(log_entry), "%s %s: %s %s in %s\n", final_time, username, action, treasure_id, hunt_id);
 
 	if (write(f_log, log_entry, strlen(log_entry)) == -1)
 	{
@@ -265,16 +278,16 @@ void add_hunt(char hunt_id[], char pathname[])
 
 
 	TREASURE tr;
-	tr = read_treasure();
+	tr = read_treasure(filepath);
 
-	if (lseek(f_out, 0, SEEK_END) == -1) //move cursor to end of file; same functionality with O_APPEND
+	if (lseek(f_out, 0, SEEK_END) == -1) //move cursor to end of file; same functionality as if O_APPEND was used
 	{
 		perror("Error lseek\n");
 		exit(-1);
 	}
 
 	write_treasure(f_out, tr);
-	write_log(pathname, tr.username, tr.treasure_id, "add");
+	write_log(pathname, tr.username, hunt_id, tr.treasure_id, "added");
 
 	create_symlink(logpath, hunt_id);
 	close_file(f_out);
@@ -314,7 +327,7 @@ void list_hunt(char hunt_id[], char pathname[])
 	printf("Hunt name: %s\n", hunt_id);
 
 	struct stat statbuf;
-	int status = stat(filepath, &statbuf);
+	int status = stat(filepath, &statbuf); //get status of file
 
 	if (status != 0)
 	{
@@ -334,7 +347,7 @@ void list_hunt(char hunt_id[], char pathname[])
 	printf("Succesfully listed hunt\n");
 }
 
-void view_tr(char* hunt_id, char* tr_id, char* pathname)
+void view_treasure(char* hunt_id, char* tr_id, char* pathname)
 {
 	int f_out = 0;
 	concat_path(pathname, hunt_id);
@@ -349,7 +362,7 @@ void view_tr(char* hunt_id, char* tr_id, char* pathname)
 	{
 		read_out = read(f_out, &tr, sizeof(TREASURE));
 
-	}while ((strcmp(tr.treasure_id, tr_id) != 0) && read_out == sizeof(TREASURE)); //read treasures until found or end of file
+	}while ((strcmp(tr.treasure_id, tr_id) != 0) && read_out == sizeof(TREASURE)); //reads treasures until found or end of file
 
 	if (strcmp(tr.treasure_id, tr_id) != 0)
 	{
@@ -375,8 +388,16 @@ void remove_treasure(char* hunt_id, char* tr_id, char* pathname)
 	//using the 'rename' function. 
 
 	char username[35];
-	printf("Username: ");
-	scanf("%s", username);
+
+	int format = 1; //variable to allow user to retry writing data if the given value has wrong format
+
+	while (format)
+	{
+		printf("Username (cannot contain whitespaces or any of the following symbols /:*?<>|): ");
+		read_line(username, sizeof(username));
+		format = check_format("	 /:*?<>|", username, 1);	
+	}
+
 	int f_out = 0, f_temp = 0;
 	concat_path(pathname, hunt_id);
 	char filepath[100], temppath[100];
@@ -398,7 +419,7 @@ void remove_treasure(char* hunt_id, char* tr_id, char* pathname)
 		else found = 1; //wanted treasure is found
 	}
 
-	close_file(f_temp);
+	close_file(f_temp); 
 	close_file(f_out);
 
 
@@ -433,16 +454,14 @@ void remove_treasure(char* hunt_id, char* tr_id, char* pathname)
 		perror("Could not remove file\n");
 		exit(-1);
 	}
-	char action[35];
-	strcpy(action, "remove from ");
-	strcat(action, hunt_id);
 
-	write_log(pathname, username, tr_id, action); //add to log
+	write_log(pathname, username, hunt_id, tr_id, "removed"); //add to log
 	printf("Successfully removed treasure\n");
 }
 
 void empty_directory(char* dirpath)
 {
+	//this function empties given directory
 	DIR *dir = opendir(dirpath);
 	if (dir == NULL)
 	{
@@ -458,7 +477,7 @@ void empty_directory(char* dirpath)
 	while ((entry = readdir(dir)) != NULL)
 	{
 		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-		continue;
+		continue; //skips . and .. from directory
 		
 		strcpy(filepath, dirpath);
 		concat_path(filepath, entry->d_name);
@@ -570,7 +589,7 @@ int main(int argc, char** argv)
 		strcpy(hunt_id, argv[2]);
 		strcpy(tr_id, argv[3]);
 
-		view_tr(hunt_id, tr_id, pathname);
+		view_treasure(hunt_id, tr_id, pathname);
 	}
 
 	else if (strcmp(argv[1], "--remove_treasure") == 0)
